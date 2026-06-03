@@ -1,36 +1,43 @@
-name: Sækja landanir
+import requests
+from bs4 import BeautifulSoup
+import json
 
-on:
-  schedule:
-    - cron: '0 */3 * * *'
-  workflow_dispatch:
+url = "https://www.fiskistofa.is/veidar/aflaupplysingar/landanir/"
+hausar = {"User-Agent": "Mozilla/5.0 (Vefapp um Austfjarðahafnir í þróun)"}
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
-jobs:
-  skrapa:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setja upp Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          
-      - name: Setja inn pakka
-        run: pip install requests beautifulsoup4
+try:
+    svar = requests.get(url, headers=hausar)
+    svar.raise_for_status()
+    vefsida = BeautifulSoup(svar.text, "html.parser")
+    tafla = vefsida.find("table")
+    
+    gogn = []
+    if tafla:
+        faerslur = tafla.find_all("tr")
+        print(f"Sannprófun: Fann {len(faerslur)-1} línur af gögnum á vef Fiskistofu.")
         
-      - name: Keyra skröpun
-        run: python skrapa.py
+        # Tökum fyrstu 300 línurnar til að ná nokkrum dögum aftur í tímann
+        for lina in faerslur[1:300]: 
+            dalkar = lina.find_all("td")
+            if len(dalkar) >= 4:
+                hofn = dalkar[2].text.strip()
+                
+                # Sía fyrir Austfirði
+                if hofn in ["Neskaupstaður", "Seyðisfjörður", "Eskifjörður", "Vopnafjörður", "Reyðarfjörður", "Fáskrúðsfjörður", "Stöðvarfjörður", "Djúpivogur", "Breiðdalsvík"]:
+                    gogn.append({
+                        "dags": dalkar[0].text.strip(),
+                        "skip": dalkar[1].text.strip(),
+                        "hofn": hofn,
+                        "afli": dalkar[3].text.strip()
+                    })
         
-      - name: Vista ný gögn í geymslu
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git pull origin main --rebase
-          git add landanir.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Uppfæra landanir" && git push)
+        print(f"Sannprófun: Eftir síun fundust {len(gogn)} landanir á Austfjörðum.")
+    else:
+        print("Sannprófun: Fann enga töflu á síðunni.")
+    
+    # Vistum gögnin
+    with open('landanir.json', 'w', encoding='utf-8') as f:
+        json.dump(gogn, f, ensure_ascii=False, indent=2)
+        
+except Exception as e:
+    print(f"Villa við skröpun: {e}")
