@@ -28,10 +28,11 @@ jobs:
       - name: Keyra skröpun
         run: python skrapa.py
         
-      - name: Vista ný gögn í geymslu
+- name: Vista ný gögn í geymslu
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          git pull origin main --rebase
           git add landanir.json
           # Vistar bara ef það eru breytingar
           git diff --quiet && git diff --staged --quiet || (git commit -m "Uppfæra landanir" && git push)
